@@ -6,12 +6,16 @@ import matplotlib.pyplot as plt
 import urllib.request
 import os
 import zipfile
+import cv2
+import glob
+
+dir = os.path.dirname(__file__)
 
 
 def main():
     # Step 1 - download google's pre-trained neural network
     url = 'https://storage.googleapis.com/download.tensorflow.org/models/inception5h.zip'
-    data_dir = 'E:/Python_Projects/deep_dream_challenge/data/'
+    data_dir = os.path.join(dir, 'data')
     model_name = os.path.split(url)[-1]
     local_zip_file = os.path.join(data_dir, model_name)
     if not os.path.exists(local_zip_file):
@@ -46,10 +50,7 @@ def main():
     print('Number of layers', len(layers))
     print('Total number of feature channels:', sum(feature_nums))
 
- # HELPER FUNCTIONS. I didn't go over these in the video for times sake. They are mostly just formatting functions. Scroll
- #to the bottom #########################################################################################################
- ########################################################################################################################
- ############################################################
+# HELPER FUNCTIONS
 
     # Helper functions for TF Graph visualization
     # pylint: disable=unused-variable
@@ -136,12 +137,32 @@ def main():
                 grad[y:y+sz, x:x+sz] = g
         return np.roll(np.roll(grad, -sx, 1), -sy, 0)
 
-    #BACK TO CODE IN THE VIDEO###########################################################################################
-    ########################################################################################################
-    ##############################################################################
-
     # CHALLENGE - Write a function that outputs a deep dream video
-    # def render_deepdreamvideo():
+    def render_deepdreamvideo(t_obj):
+        # TODO:
+        # each frame as a individual imag
+        def key_func(x):
+            return os.path.split(x)[-1]
+
+        images = [cv2.imread(file) for file in sorted(glob.glob(
+            "E:/Python_Projects/deep_dream_challenge/image_data/*.png"), key=key_func)]
+
+        # Apply Gradient ascent for each image
+        counter = 0
+        for img in images:
+            img = np.float32(img)
+            img = render_deepdream(t_obj, img)/255.0
+            img = np.uint8(np.clip(img, 0, 1)*255)
+            # Store image in output
+            plt.imshow(img/255.0)
+            plt.axis('off')
+            plt.subplots_adjust(bottom=0, top=1, left=0, right=1)
+            plt.savefig(os.path.join(dir, 'output', 'frame%05d.png') %
+                        counter, bbox_inches='tight', pad_inches=0, transparent=True)
+            print("Frame %d Generated Successfully..." % counter)
+            counter += 1
+
+    # Reconstruct video
 
     def render_deepdream(t_obj, img0=img_noise,
                          iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
@@ -169,9 +190,10 @@ def main():
 
             # this will usually be like 3 or 4 octaves
             # Step 5 output deep dream image via matplotlib
-            showarray(img/255.0)
+            # showarray(img/255.0)
+            return img
 
-        # Step 3 - Pick a layer to enhance our image
+    # Step 3 - Pick a layer to enhance our image
     layer = 'mixed4d_3x3_bottleneck_pre_relu'
     channel = 139  # picking some feature channel to visualize
 
@@ -180,7 +202,8 @@ def main():
     img0 = np.float32(img0)
 
     # Step 4 - Apply gradient ascent to that layer
-    render_deepdream(tf.square(T('mixed4c')), img0)
+    # render_deepdream(tf.square(T('mixed4c'))), img0)
+    render_deepdreamvideo(tf.square(T('mixed4c')))
 
 
 if __name__ == '__main__':
