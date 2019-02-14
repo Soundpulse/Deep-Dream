@@ -1,5 +1,5 @@
 import numpy as np
-from functools import partial
+from scipy.ndimage.filters import gaussian_filter
 import PIL.Image
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -8,8 +8,6 @@ import os
 import zipfile
 import cv2
 import glob
-
-dir = os.path.dirname(__file__)
 
 
 def main():
@@ -54,6 +52,26 @@ def main():
 
     # Helper functions for TF Graph visualization
     # pylint: disable=unused-variable
+    def recursive_dream(layer_tensor, image, repeat=3, scale=0.7, blend=0.2, iteration_n=10):
+        if repeat > 0:
+            sigma = 0.5
+            img_blur = gaussian_filter(image, (sigma, sigma, 0.0))
+
+            h0 = img_blur.shape[0]
+            w0 = img_blur.shape[1]
+            h1 = int(scale * h0)
+            w1 = int(scale * w0)
+            img_downscaled = cv2.resize(img_blur, (w1, h1))
+
+            img_dream = recursive_dream(layer_tensor, img_downscaled,
+                                        repeat - 1, scale, blend, iteration_n)
+            img_upscaled = cv2.resize(img_dream, (w0, h0))
+
+            image = blend * image + (1.0 - blend) * img_upscaled
+            image = np.clip(image, 0, 255)
+
+        return render_deepdream(layer_tensor, image, iter_n=20)
+
     def strip_consts(graph_def, max_const_size=32):
         """Strip large constant values from graph_def."""
         strip_def = tf.GraphDef()
@@ -138,31 +156,70 @@ def main():
         return np.roll(np.roll(grad, -sx, 1), -sy, 0)
 
     # CHALLENGE - Write a function that outputs a deep dream video
-    def render_deepdreamvideo(t_obj):
-        # TODO:
-        # each frame as a individual imag
+    def render_deepdreamvideo(t_obj, iteration_n=10):
         def key_func(x):
             return os.path.split(x)[-1]
 
+        # Split video into frames
+        print("Splitting Video...")
+        split_video()
+
         images = [cv2.imread(file) for file in sorted(glob.glob(
-            "E:/Python_Projects/deep_dream_challenge/image_data/*.png"), key=key_func)]
+            "E:/Python_Projects/deep_dream_challenge/input/*.png"), key=key_func)]
 
         # Apply Gradient ascent for each image
+        print("Applying Gradient Ascent...")
         counter = 0
         for img in images:
             img = np.float32(img)
-            img = render_deepdream(t_obj, img)/255.0
+            img = recursive_dream(t_obj, img, repeat=3,
+                                  scale=0.7, blend=0.2, iteration_n=iteration_n)/255.0
             img = np.uint8(np.clip(img, 0, 1)*255)
             # Store image in output
             plt.imshow(img/255.0)
             plt.axis('off')
             plt.subplots_adjust(bottom=0, top=1, left=0, right=1)
             plt.savefig(os.path.join(dir, 'output', 'frame%05d.png') %
-                        counter, bbox_inches='tight', pad_inches=0, transparent=True)
+                        counter, bbox_inches='tight', pad_inches=0, transparent=True, frameon=False)
             print("Frame %d Generated Successfully..." % counter)
             counter += 1
 
-    # Reconstruct video
+        print("Saving...")
+        save()
+
+    def split_video():
+        # Playing video from file:
+        cap = cv2.VideoCapture("E:/Python_Projects/deep_dream_challenge/test_vid.mp4")
+
+        try:
+            if not os.path.exists('input'):
+                os.makedirs('input')
+        except OSError:
+            print('Error: Creating directory of input')
+
+        currentFrame = 0
+        ret, frame = cap.read()
+        while ret:
+            # Saves image of the current frame in jpg file
+            strn = str(currentFrame).zfill(5)
+            name = 'E:/Python_Projects/deep_dream_challenge/input/frame' + strn + '.png'
+            print('Creating...' + name)
+            cv2.imwrite(name, frame)
+            ret, frame = cap.read()
+            # To stop duplicate images
+            currentFrame += 1
+
+        # When everything done, release the capture
+        cap.release()
+
+    def save():
+        try:
+            if not os.path.exists('output'):
+                os.makedirs('output')
+        except OSError:
+            print('Error: Creating directory of output')
+        # Assumes ffmpeg installed in E:/ffmpeg
+        os.system("E:/ffmpeg/bin/ffmpeg.exe -r 24 -start_number 0 -i E:/Python_Projects/deep_dream_challenge/output/frame%05d.png -c:v libx264 -vf E:/Python_Projects/deep_dream_challenge/output.mp4")
 
     def render_deepdream(t_obj, img0=img_noise,
                          iter_n=10, step=1.5, octave_n=4, octave_scale=1.4):
@@ -194,16 +251,16 @@ def main():
             return img
 
     # Step 3 - Pick a layer to enhance our image
+    # layer_names = ['conv2d0', 'conv2d1', 'conv2d2',
+    #            'mixed3a', 'mixed3b', 'mixed4a', 'mixed4b', 'mixed4c', 'mixed4d', 'mixed4e',
+    #            'mixed5a', 'mixed5b']
     layer = 'mixed4d_3x3_bottleneck_pre_relu'
     channel = 139  # picking some feature channel to visualize
 
-    # open image
-    img0 = PIL.Image.open('E:/Python_Projects/deep_dream_challenge/test.jpg')
-    img0 = np.float32(img0)
-
+    render_deepdreamvideo(tf.square(T('conv2d2')))
     # Step 4 - Apply gradient ascent to that layer
-    # render_deepdream(tf.square(T('mixed4c'))), img0)
-    render_deepdreamvideo(tf.square(T('mixed4c')))
+
+    print("Done.")
 
 
 if __name__ == '__main__':
