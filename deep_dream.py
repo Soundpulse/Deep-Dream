@@ -186,7 +186,6 @@ def main():
             plt.imshow(img/255.0)
             plt.axis('off')
             plt.subplots_adjust(bottom=0, top=1, left=0, right=1)
-            plt.savefig(os.path.join(dir, 'output', 'frame%05d.png') %
             plt.savefig(('./output/frame%05d.png') %
                         counter, bbox_inches='tight', pad_inches=0, transparent=True, frameon=False)
             print("Frame %d Generated Successfully..." % counter)
