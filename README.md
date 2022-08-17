@@ -1,6 +1,4 @@
-# deep_dream_challenge
-
-Challenge #5 of Siraj's Python for Data Science Series.
+Converts video clips into deep dream templates.
 
 Added functions for making videos with deep dream.
 
